@@ -6,6 +6,7 @@ import java.awt.event.KeyEvent;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Random;
 
 import javax.imageio.ImageIO;
 import javax.swing.ImageIcon;
@@ -23,20 +24,30 @@ import javax.swing.SwingConstants;
 public class GUI extends JFrame implements ActionListener {
 	private static final long serialVersionUID = 1L;
 
+	//game variables
 	int NUMROWS = 3;
 	int XSCORE = 0;
 	int OSCORE = 0;
 	int NUMTURN = 0;
 	Boolean currentTurn = true;
-	Boolean compON = false;
+	Boolean compON = true;
 	Boolean isWin = false;
 	Short[][] gridVals;
 
-	ImageIcon tilePressed = new ImageIcon(ImageIO.read(new File("bin/emoji.png")));
-	ImageIcon defTile = new ImageIcon(ImageIO.read(new File("bin/blank.png")));
-	ImageIcon xTile = new ImageIcon(ImageIO.read(new File("bin/X.png")));
-	ImageIcon oTile = new ImageIcon(ImageIO.read(new File("bin/o.png")));
+	//AI variables
+	Random random = new Random();
+	int AILOSECHANCE = 2;
+	boolean isCorner = false;
+	int lastX = 0;
+	int lastY = 0;
+	int y = 0;
+	int x = 0;
 
+	//GUI variables
+	ImageIcon tilePressed = new ImageIcon(ImageIO.read(new File("lib/emoji.png")));
+	ImageIcon defTile = new ImageIcon(ImageIO.read(new File("lib/blank.png")));
+	ImageIcon xTile = new ImageIcon(ImageIO.read(new File("lib/X.png")));
+	ImageIcon oTile = new ImageIcon(ImageIO.read(new File("lib/o.png")));
 	JMenuBar mBar = new JMenuBar();;
 	JMenu menu;
 	JMenuItem newGameButton = new JMenuItem("New Game");
@@ -92,10 +103,10 @@ public class GUI extends JFrame implements ActionListener {
 		setTitle("Noughts and Crosses");
 		setJMenuBar(mBar);
 		add(scorePanel, BorderLayout.NORTH);
-		setLocationRelativeTo(null);
 		pack();
 		setResizable(false);
 		setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+		setLocationRelativeTo(null);
 	}
 
 	//check for win after last grid value was changed at [q][p]. s denotes which player (1 = x and 2 = o)
@@ -108,7 +119,7 @@ public class GUI extends JFrame implements ActionListener {
 				//check squares that are in bounds only
 				int yTotal = (q + dy);
 				int xTotal = (p + dx);
-				
+
 				if (yTotal >= 0 && yTotal < gridVals.length && xTotal >= 0 && xTotal < gridVals[q].length) {
 					if (gridVals[yTotal][xTotal] == s) {
 
@@ -150,7 +161,7 @@ public class GUI extends JFrame implements ActionListener {
 									displayWin();
 								}
 							}
-							
+
 							rowWin = 0;
 							//bottom left to top right
 							if ((yTotal + xTotal) == (NUMROWS - 1)) {
@@ -181,15 +192,16 @@ public class GUI extends JFrame implements ActionListener {
 		}else {
 			turnDisp.setText("O is up");
 		}
-		
 	}
-	
+
 	public void updateButton(int i, int j) {
 		//change button and grid values
 		if (currentTurn == true) {
 			buttonGrid.get(i).get(j).setIcon(xTile);
 			gridVals[i][j] = 1;
 			NUMTURN++;
+			lastY = i;
+			lastX = j;
 			if (NUMTURN > NUMROWS) {
 				checkWin(i, j, gridVals[i][j]);
 			}
@@ -204,7 +216,7 @@ public class GUI extends JFrame implements ActionListener {
 			}
 			currentTurn ^= true;
 		}
-		
+
 		if (NUMTURN == (NUMROWS * NUMROWS) && isWin == false) {
 			displayDraw();
 		}
@@ -221,11 +233,16 @@ public class GUI extends JFrame implements ActionListener {
 			updateScoreBoard();
 			JOptionPane.showMessageDialog(bPanel, "Noughts Wins!");
 		}
-		
+		setupButtonGrid();
+		resetGame();
+
 	}
-	
+
 	public void displayDraw() {
 		JOptionPane.showMessageDialog(bPanel, "Draw!");
+		updateScoreBoard();
+		setupButtonGrid();
+		resetGame();
 	}
 
 	//reset grid values
@@ -233,6 +250,11 @@ public class GUI extends JFrame implements ActionListener {
 		NUMTURN = 0;
 		gridVals = new Short[NUMROWS][NUMROWS];
 		isWin = false;
+		isCorner = false;
+		x = 0;
+		y = 0;
+		lastY = 0;
+		lastX = 0;
 
 		for (int i = 0; i < gridVals.length; i ++) {
 			for (int j = 0; j < gridVals[i].length; j++) {
@@ -246,7 +268,7 @@ public class GUI extends JFrame implements ActionListener {
 		if (bPanel != null) {
 			remove(bPanel);
 		}
-	
+
 		bPanel = new JPanel(new GridLayout(NUMROWS, NUMROWS));
 		buttonGrid = new ArrayList<ArrayList<JButton>>();
 		for (int q = 0; q < NUMROWS; ++q) {
@@ -271,7 +293,7 @@ public class GUI extends JFrame implements ActionListener {
 
 	//Handle button events
 	public void actionPerformed(ActionEvent e) {
-	
+
 		//new game button
 		if(e.getSource() == newGameButton) {
 			setupButtonGrid();
@@ -297,7 +319,7 @@ public class GUI extends JFrame implements ActionListener {
 					}
 				}
 			}
-	
+
 			//iterate over button grid to check for event
 			for (int i = 0; i < NUMROWS; ++i) {
 				for (int j = 0; j < NUMROWS; ++j) {
@@ -305,9 +327,9 @@ public class GUI extends JFrame implements ActionListener {
 						//Player's actions done here
 						updateButton(i, j);
 						updateScoreBoard();
-						
+
 						//auto complete AI action here
-						if (compON == true) {
+						if (compON == true && currentTurn == false) {
 							runAI();
 						}
 					}
@@ -315,22 +337,337 @@ public class GUI extends JFrame implements ActionListener {
 			}
 		}
 	}
-	
-	//Not implemented yet
-	public void runAI() {
-		int y = 0;
-		int x = 0;
-		
-		//check all played positions
-		//Need to check if first position is corner, side or middle. Then check which positions are open for play....etc
-		for (int i = 0; i < NUMROWS; ++i) {
-			for (int j = 0; j < NUMROWS; ++j) {
-				
+
+	//checks if AI needs to block player win 
+	public boolean aiCheckPlayer() {
+		boolean spotFound = false;
+		int line = 0;
+		//horizontal check
+		for (int i = 0; i < NUMROWS; i++) {
+			line = 0;
+			for (int j = 0; j < NUMROWS; j++) {
+				if (gridVals[i][j] == 1) {
+					line++;
+				}
+			}
+			if (line > 1) {
+				for (int k = 0; k < NUMROWS; k++) {
+					if (gridVals[i][k] == 0) {
+						y = i;
+						x = k;
+						spotFound = true;
+					}
+				}
+				if (spotFound) {
+					break;
+				}
 			}
 		}
-		
-		updateButton(y, x);
-		updateScoreBoard();
+
+		//vertical check
+		for (int i = 0; i < NUMROWS; i++) {
+			line = 0;
+			for (int j = 0; j < NUMROWS; j++) {
+				if (gridVals[j][i] == 1) {
+					line++;
+				}
+			}
+			if (line > 1) {
+				for (int k = 0; k < NUMROWS; k++) {
+					if (gridVals[k][i] == 0) {
+						y = k;
+						x = i;
+						spotFound = true;
+					}
+				}
+				if (spotFound) {
+					break;
+				}
+			}
+		}
+
+		//diagonal L to R
+		line = 0;
+		for (int i = 0; i < NUMROWS; i++) {
+			if (gridVals[i][i] == 1) {
+				line++;
+			}
+
+			if (line > 1) {
+				for (int j = 0; j < NUMROWS; j++) {
+					if (gridVals[j][j] == 0) {
+						y = j;
+						x = j;
+						spotFound = true;
+					}
+				}
+				if (spotFound) {
+					break;
+				}
+			}
+		}
+
+		//diagnoal R to L
+		line = 0;
+		if (gridVals[0][2] == 1) {
+			line++;
+		}
+		if (gridVals[1][1] == 1) {
+			line++;
+		}
+		if (gridVals[2][0] == 1) {
+			line++;
+		}
+
+		if (line > 1) {
+			if (gridVals[0][2] == 0) {
+				x = 2;
+				y = 0;
+				spotFound = true;
+			}
+			if (gridVals[1][1] == 0) {
+				x = 1;
+				y = 1;
+				spotFound = true;
+			}
+			if (gridVals[2][0] == 0) {
+				x = 0;
+				y = 2;
+				spotFound = true;
+			}
+		}
+
+		return spotFound;
+	}
+
+	//checks if AI can play a winning spot
+	public boolean aiCheckSelf() {
+		boolean spotFound = false;
+		//horizontal check
+		for (int i = 0; i < NUMROWS; i++) {
+			int line = 0;
+			for (int j = 0; j < NUMROWS; j++) {
+				if (gridVals[i][j] == 2) {
+					line++;
+				}
+			}
+			if (line > 1) {
+				for (int k = 0; k < NUMROWS; k++) {
+					if (gridVals[i][k] == 0) {
+						y = i;
+						x = k;
+						spotFound = true;
+					}
+				}
+				if (spotFound) {
+					break;
+				}
+			}
+		}
+
+		//vertical check
+		for (int i = 0; i < NUMROWS; i++) {
+			int line = 0;
+			for (int j = 0; j < NUMROWS; j++) {
+				if (gridVals[j][i] == 2) {
+					line++;
+				}
+			}
+			if (line > 1) {
+				for (int k = 0; k < NUMROWS; k++) {
+					if (gridVals[k][i] == 0) {
+						y = k;
+						x = i;
+						spotFound = true;
+					}
+				}
+				if (spotFound) {
+					break;
+				}
+			}
+		}
+
+		//diagonal L to R
+		for (int i = 0; i < NUMROWS; i++) {
+			int line = 0;
+			if (gridVals[i][i] == 2) {
+				line++;
+			}
+
+			if (line > 1) {
+				for (int j = 0; j < NUMROWS; j++) {
+					if (gridVals[j][j] == 0) {
+						y = j;
+						x = j;
+						spotFound = true;
+					}
+				}
+				if (spotFound) {
+					break;
+				}
+			}
+		}
+
+		//diagnoal R to L
+		int line = 0;
+		if (gridVals[0][2] == 2) {
+			line++;
+		}
+		if (gridVals[1][1] == 2) {
+			line++;
+		}
+		if (gridVals[2][0] == 2) {
+			line++;
+		}
+
+		if (line > 1) {
+			if (gridVals[0][2] == 0) {
+				x = 2;
+				y = 0;
+				spotFound = true;
+			}
+			if (gridVals[1][1] == 0) {
+				x = 1;
+				y = 1;
+				spotFound = true;
+			}
+			if (gridVals[2][0] == 0) {
+				x = 0;
+				y = 2;
+				spotFound = true;
+			}
+		}
+		return spotFound;
+	}
+
+	//Not implemented yet
+	public void runAI() {
+		switch (NUMTURN) {
+
+		//case = each turn - did not implement AI going first
+		case 0:
+			int n = random.nextInt(4);
+			switch(n) {
+			case 1:
+				x = 2;
+				break;
+			case 2:
+				y = 2;
+				break;
+			case 3:
+				x = 2;
+				y = 2;
+				break;
+			}
+			break;
+		case 1:
+			//corner spots
+			if ((lastY == 0 && lastX == 0) || (lastY == 2 && lastX == 2) || (lastY == 0 && lastX == 2) || (lastY == 2 && lastX == 0)) {
+				//take center spot
+				x = 1;
+				y = 1;
+				isCorner = true;
+
+				//chance to make a losing move
+				if (random.nextInt(AILOSECHANCE) == 0) {
+					for (int i = 0; i < NUMROWS; i ++) {
+						for (int j = 0; j < NUMROWS; j++) {
+							if (gridVals[i][j] == 0) {
+								y = i;
+								x = j;
+							}
+						}
+					}
+				}
+				//center spot or side spot
+			}else if ((lastY == 1 && lastX == 1) || (lastY == 1 && lastX == 0) || (lastY == 1 && lastX == 2) || (lastY == 2 && lastX == 1) || (lastY == 0 && lastX == 1)) {
+				//random corner spot
+				n = random.nextInt(4);
+				switch(n) {
+				case 1:
+					x = 2;
+					break;
+				case 2:
+					y = 2;
+					break;
+				case 3:
+					x = 2;
+					y = 2;
+					break;
+				}
+			}
+
+			break;
+		case 2:
+			if (lastY == 1 && lastX == 1) {
+				//if player chose center, choose the opposite diagonal tile from the original
+				if (x == 2) {
+					x = 0;
+				}else {
+					x = 2;
+				}
+				if (y ==2) {
+					y = 0;
+				}else {
+					y = 2;
+				}
+			}else {
+				//random corner spot
+				boolean cornerFound = false;
+				while (cornerFound == false) {
+					n = random.nextInt(4);
+					switch(n) {
+					case 1:
+						x = 2;
+						y = 0;
+						break;
+					case 2:
+						y = 2;
+						x = 0;
+						break;
+					case 3:
+						x = 2;
+						y = 2;
+						break;
+					}
+					if (gridVals[x][y] == 0) {
+						cornerFound = true;
+					}
+				}
+			}
+			break;
+		case 3:
+			if (aiCheckPlayer() == false) {
+				if (gridVals[2][1] == 0) {
+					x = 1;
+					y = 0;
+				}else {
+					x = 0;
+					y = 1;
+				}
+			}
+
+			break;
+		case 4: case 5: case 6: case 7: case 8: case 9:
+			if (aiCheckSelf() == false) {
+				if (aiCheckPlayer() == false) {
+					for (int i = 0; i < NUMROWS; i ++) {
+						for (int j = 0; j < NUMROWS; j++) {
+							if (gridVals[i][j] == 0) {
+								y = i;
+								x = j;
+							}
+						}
+					}
+				}
+			}
+			break;
+		}
+
+		if (gridVals[y][x] == 0) {
+			updateButton(y, x);
+			updateScoreBoard();
+		}
 	}
 
 	public static void main(String[] args) throws IOException {
